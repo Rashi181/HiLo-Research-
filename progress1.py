@@ -28,7 +28,7 @@ mse_test = np.mean((y_test - pred_test) ** 2)
 
 #GPR from scratch 
 
-# RBF kernel to measure similarity between two sets of points
+# Step1: Creating the RBF kernel
 def my_RBF_kernel(A, B, l=1.0):
     # squared distance between every row of A and every row of B
     diff = A[:, None, :] - B[None, :, :]   # shape (n, m, d)
@@ -50,41 +50,34 @@ def predict(X_star):
     K_star =my_RBF_kernel(X_star, X_train, l)
     return K_star @ alpha
 
-#Uncertainity: covariance:
-# Kernel matrices needed
 
+#Creating the covariance (uncertainity)
+
+# Kernel matrices needed
 # K_* : kernel between test points and training points  
 K_star  = my_RBF_kernel(X_test, X_train, l)
-
 # K_** : kernel between test points and themselves 
 K_starstar = my_RBF_kernel(X_test, X_test, l)
 
 # Predictive mean 
-pred_mean = K_star @ alpha                    
-
-# --- Predictive covariance ---
-# cov(f*) = K_** - K_*^T (K + σ²I)^{-1} K_*
-# Note: K_star is (n_test, n_train), so K_star^T is (n_train, n_test)
-# K_star @ K_inv @ K_star.T  gives (n_test, n_test)
+pred_mean = K_star @ alpha                   
 
 cov_f_star = K_starstar - K_star @ K_inv @ K_star.T  
 
-# --- Predictive std dev (one number per test point) ---
-# diagonal of the covariance matrix = variance per point
-var_f_star = np.diag(cov_f_star)                    # shape (n_test,)
-std_f_star = np.sqrt(np.clip(var_f_star, 0, None))  # clip to avoid tiny negatives from floating point
+#Predictive std dev 
+var_f_star = np.diag(cov_f_star)                    
+std_f_star = np.sqrt(np.clip(var_f_star, 0, None)) 
 
+#Test 
 pred_test_sc = predict(X_test)
-
-
 mse_test_sc = np.mean((y_test - pred_test_sc) ** 2)
 
 
-
-# 5. PART 3: Validate both agree 
+# Validate both agree 
 print(f"\n[sklearn]  Test MSE: {mse_test:.2e}")
 print(f"[scratch]  Test MSE: {mse_test_sc:.2e}")
 
 difference = abs(mse_test - mse_test_sc)
 print(f"\nAbsolute difference in MSE: {difference:.2e}")
+
 
