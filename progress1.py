@@ -28,7 +28,7 @@ mse_test = np.mean((y_test - pred_test) ** 2)
 
 #GPR from scratch 
 
-# Step1: Creating the RBF kernel
+# Creating the RBF kernel
 def my_RBF_kernel(A, B, l=1.0):
     # squared distance between every row of A and every row of B
     diff = A[:, None, :] - B[None, :, :]   # shape (n, m, d)
@@ -39,45 +39,30 @@ l = gpr.kernel_.length_scale   # reuse the length-scale sklearn found
 
 # Build the kernel matrix on training data
 K = my_RBF_kernel(X_train, X_train, l)
-K += 1e-8 * np.eye(750)               # small jitter for stability
+K += 1e-8 * np.eye(750)               #for stability
 
 # alpha = K^{-1} y  
 K_inv = np.linalg.inv(K)
 alpha = K_inv @ y_train
 
 # Predict: mean = K(X*, X) @ alpha
-def predict(X_star):
-    K_star =my_RBF_kernel(X_star, X_train, l)
-    return K_star @ alpha
+def gp_predict(X_star):
+    K_star     = my_RBF_kernel(X_star, X_train, l)
+    K_starstar = my_RBF_kernel(X_star, X_star, l)
+    mean       = K_star @ alpha
+    cov        = K_starstar - K_star @ K_inv @ K_star.T
+    std        = np.sqrt(np.clip(np.diag(cov), 0, None))
+    return mean, std
 
-
-#Creating the covariance (uncertainity)
-
-# Kernel matrices needed
-# K_* : kernel between test points and training points  
-K_star  = my_RBF_kernel(X_test, X_train, l)
-# K_** : kernel between test points and themselves 
-K_starstar = my_RBF_kernel(X_test, X_test, l)
-
-# Predictive mean 
-pred_mean = K_star @ alpha                   
-
-cov_f_star = K_starstar - K_star @ K_inv @ K_star.T  
-
-#Predictive std dev 
-var_f_star = np.diag(cov_f_star)                    
-std_f_star = np.sqrt(np.clip(var_f_star, 0, None)) 
 
 #Test 
-pred_test_sc = predict(X_test)
-mse_test_sc = np.mean((y_test - pred_test_sc) ** 2)
+scratch_pred, scratch_std = gp_predict(X_test)
+mse_test_sc = np.mean((y_test - scratch_pred) ** 2)
 
 
 # Validate both agree 
-print(f"\n[sklearn]  Test MSE: {mse_test:.2e}")
+print(f"[sklearn]  Test MSE: {mse_test:.2e}")
 print(f"[scratch]  Test MSE: {mse_test_sc:.2e}")
-
-difference = abs(mse_test - mse_test_sc)
-print(f"\nAbsolute difference in MSE: {difference:.2e}")
+print(f"Absolute difference: {abs(mse_test - mse_test_sc):.2e}")
 
 
