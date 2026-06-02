@@ -12,12 +12,10 @@ y = df["y"].values
 rng = np.random.default_rng(30)
 idx = rng.permutation(1000)
 
-X_train = x[idx[:700]].reshape(-1, 1) 
-y_train = y[idx[:700]]
-X_test  = x[idx[700:900]].reshape(-1,1)
-y_test  = y[idx[700:900]]
-X_val   = x[idx[900:]].reshape(-1, 1)
-y_val   = y[idx[900:]]
+X_train = x[idx[:750]].reshape(-1, 1) 
+y_train = y[idx[:750]]
+X_test  = x[idx[750:1000]].reshape(-1,1)
+y_test  = y[idx[750:1000]]
 
 
 #sklearn GPR 
@@ -25,17 +23,13 @@ gpr = GaussianProcessRegressor(kernel=RBF(), alpha=1e-8)
 gpr.fit(X_train, y_train)
 
 pred_test = gpr.predict(X_test)
-pred_val  = gpr.predict(X_val)
-
 mse_test = np.mean((y_test - pred_test) ** 2)
-mse_val  = np.mean((y_val  - pred_val ) ** 2)
 
-print(f"[sklearn]  Test MSE: {mse_test:.2e}   Val MSE: {mse_val:.2e}")
 
 #GPR from scratch 
 
 # RBF kernel to measure similarity between two sets of points
-def rbf_kernel(A, B, l=1.0):
+def my_RBF_kernel(A, B, l=1.0):
     # squared distance between every row of A and every row of B
     diff = A[:, None, :] - B[None, :, :]   # shape (n, m, d)
     dist2 = np.sum(diff ** 2, axis=-1)      # shape (n, m)
@@ -44,26 +38,53 @@ def rbf_kernel(A, B, l=1.0):
 l = gpr.kernel_.length_scale   # reuse the length-scale sklearn found
 
 # Build the kernel matrix on training data
-K = rbf_kernel(X_train, X_train, l)
-K += 1e-8 * np.eye(700)               # small jitter for stability
+K = my_RBF_kernel(X_train, X_train, l)
+K += 1e-8 * np.eye(750)               # small jitter for stability
 
-# Precompute alpha = K^{-1} y  (via Cholesky for stability)
-L     = np.linalg.cholesky(K)
-alpha = np.linalg.solve(L.T, np.linalg.solve(L, y_train))
+# alpha = K^{-1} y  
+K_inv = np.linalg.inv(K)
+alpha = K_inv @ y_train
 
 # Predict: mean = K(X*, X) @ alpha
 def predict(X_star):
-    K_star = rbf_kernel(X_star, X_train, l)
+    K_star =my_RBF_kernel(X_star, X_train, l)
     return K_star @ alpha
 
+#Uncertainity: covariance:
+# Kernel matrices needed
+
+# K_* : kernel between test points and training points  
+K_star  = my_RBF_kernel(X_test, X_train, l)
+
+# K_** : kernel between test points and themselves 
+K_starstar = my_RBF_kernel(X_test, X_test, l)
+
+# Predictive mean 
+pred_mean = K_star @ alpha                    
+
+# --- Predictive covariance ---
+# cov(f*) = K_** - K_*^T (K + σ²I)^{-1} K_*
+# Note: K_star is (n_test, n_train), so K_star^T is (n_train, n_test)
+# K_star @ K_inv @ K_star.T  gives (n_test, n_test)
+
+cov_f_star = K_starstar - K_star @ K_inv @ K_star.T  
+
+# --- Predictive std dev (one number per test point) ---
+# diagonal of the covariance matrix = variance per point
+var_f_star = np.diag(cov_f_star)                    # shape (n_test,)
+std_f_star = np.sqrt(np.clip(var_f_star, 0, None))  # clip to avoid tiny negatives from floating point
+
 pred_test_sc = predict(X_test)
-pred_val_sc  = predict(X_val)
+
 
 mse_test_sc = np.mean((y_test - pred_test_sc) ** 2)
-mse_val_sc  = np.mean((y_val  - pred_val_sc ) ** 2)
 
-print(f"[scratch]  Test MSE: {mse_test_sc:.2e}   Val MSE: {mse_val_sc:.2e}")
 
-# ── 5. PART 3: Validate both agree ───────────────────────────────
-max_diff = np.max(np.abs(pred_test - pred_test_sc))
-print(f"\nMax difference between sklearn and scratch: {max_diff:.2e}")
+
+# 5. PART 3: Validate both agree 
+print(f"\n[sklearn]  Test MSE: {mse_test:.2e}")
+print(f"[scratch]  Test MSE: {mse_test_sc:.2e}")
+
+difference = abs(mse_test - mse_test_sc)
+print(f"\nAbsolute difference in MSE: {difference:.2e}")
+
