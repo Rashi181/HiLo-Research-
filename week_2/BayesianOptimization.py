@@ -9,7 +9,7 @@ from Week_1.progress1 import my_RBF_kernel, gp_predict
 
 def f(x):
     eps = np.random.normal(0, 0.1)
-    return x**2 + eps
+    return -x**2 
 
 # Initial training data (only 5 random samples)
 np.random.seed(42)
@@ -52,7 +52,7 @@ def propose_candidate(X_train, y_train, t, bounds=(-2, 2), n_candidates=1000):
 
     return x_star, X_cand, acq
 
-n_iter = 15
+n_iter = 50
 
 for t in range(1, n_iter + 1):
     x_star, X_cand, acq = propose_candidate(X, y, t)
@@ -62,11 +62,11 @@ for t in range(1, n_iter + 1):
     X = np.vstack([X, x_star])                 # add x* to dataset
     y = np.append(y, y_star)                   # add y* to dataset
 
-    best_idx = np.argmin(y)
+    best_idx = np.argmax(y)
     print(f"Iter {t:02d} | x* = {x_star[0]:+.4f} | y* = {y_star:.4f} | "
           f"best x = {X[best_idx][0]:+.4f} | best y = {y[best_idx]:.4f}")
 
 
 
-best_idx = np.argmin(y)
+best_idx = np.argmax(y)
 print(f"\nMinimum found: x = {X[best_idx][0]:+.4f}, f(x) = {y[best_idx]:.4f}")
